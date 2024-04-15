@@ -14,11 +14,13 @@ type LinkProps = Parameters<typeof Link>[0];
 
 export type RouteInfo<
   Params extends z.ZodSchema,
-  Search extends z.ZodSchema
+  Search extends z.ZodSchema,
+  Anchor extends z.ZodSchema
 > = {
   name: string;
   params: Params;
   search: Search;
+  anchor: Anchor; 
   description?: string;
 };
 
@@ -44,24 +46,29 @@ type PushOptions = Parameters<ReturnType<typeof useRouter>["push"]>[1];
 
 type CoreRouteElements<
   Params extends z.ZodSchema,
-  Search extends z.ZodSchema = typeof emptySchema
+  Search extends z.ZodSchema = typeof emptySchema,
+  Anchor extends z.ZodSchema = typeof emptySchema
 > = {
   params: z.output<Params>;
   paramsSchema: Params;
   search: z.output<Search>;
   searchSchema: Search;
+  anchor: z.output<Anchor>;
+  anchorSchema: Anchor;
 };
 
 type PutRouteBuilder<
   Params extends z.ZodSchema,
   Search extends z.ZodSchema,
+  Anchor extends z.ZodSchema,
   Body extends z.ZodSchema,
   Result extends z.ZodSchema
-> = CoreRouteElements<Params, Search> & {
+> = CoreRouteElements<Params, Search, Anchor> & {
   (
     body: z.input<Body>,
     p?: z.input<Params>,
     search?: z.input<Search>,
+    anchor?: z.input<Anchor>,
     options?: FetchOptions
   ): Promise<z.output<Result>>;
 
@@ -69,18 +76,22 @@ type PutRouteBuilder<
   bodySchema: Body;
   result: z.output<Result>;
   resultSchema: Result;
+  anchor: z.output<Anchor>;
+  anchorSchema: Anchor;
 };
 
 type PostRouteBuilder<
   Params extends z.ZodSchema,
   Search extends z.ZodSchema,
+  Anchor extends z.ZodSchema,
   Body extends z.ZodSchema,
   Result extends z.ZodSchema
-> = CoreRouteElements<Params, Search> & {
+> = CoreRouteElements<Params, Search, Anchor> & {
   (
     body: z.input<Body>,
     p?: z.input<Params>,
     search?: z.input<Search>,
+    anchor?: z.input<Anchor>,
     options?: FetchOptions
   ): Promise<z.output<Result>>;
 
@@ -93,11 +104,13 @@ type PostRouteBuilder<
 type GetRouteBuilder<
   Params extends z.ZodSchema,
   Search extends z.ZodSchema,
+  Anchor extends z.ZodSchema,
   Result extends z.ZodSchema
-> = CoreRouteElements<Params, Search> & {
+> = CoreRouteElements<Params, Search, Anchor> & {
   (
     p?: z.input<Params>,
     search?: z.input<Search>,
+    anchor?: z.input<Anchor>,
     options?: FetchOptions
   ): Promise<z.output<Result>>;
 
@@ -114,15 +127,17 @@ type DeleteRouteBuilder<Params extends z.ZodSchema> = CoreRouteElements<
 
 type RouteBuilder<
   Params extends z.ZodSchema,
-  Search extends z.ZodSchema
-> = CoreRouteElements<Params, Search> & {
-  (p?: z.input<Params>, search?: z.input<Search>): string;
+  Search extends z.ZodSchema,
+  Anchor extends z.ZodSchema,
+> = CoreRouteElements<Params, Search, Anchor> & {
+  (p?: z.input<Params>, search?: z.input<Search>, anchor?: z.input<Anchor>): string;
 
   useParams: () => z.output<Params>;
   useSearchParams: () => z.output<Search>;
   usePush: () => (
     params: z.input<Params>,
     search?: z.input<Search>,
+    anchor?: z.input<Anchor>,
     options?: PushOptions
   ) => void;
 
@@ -130,12 +145,14 @@ type RouteBuilder<
     Omit<LinkProps, "href"> &
       z.input<Params> & {
         search?: z.input<Search>;
+        anchor?: z.input<Anchor>;
       } & { children?: React.ReactNode }
   >;
   ParamsLink: React.FC<
     Omit<LinkProps, "href"> & {
       params?: z.input<Params>;
       search?: z.input<Search>;
+      anchor?: z.input<Anchor>;
     } & { children?: React.ReactNode }
   >;
 };
@@ -183,11 +200,12 @@ function createPathBuilder<T extends Record<string, string | string[]>>(
 
 function createRouteBuilder<
   Params extends z.ZodSchema,
-  Search extends z.ZodSchema
->(route: string, info: RouteInfo<Params, Search>) {
+  Search extends z.ZodSchema,
+  Anchor extends z.ZodSchema
+>(route: string, info: RouteInfo<Params, Search, Anchor>) {
   const fn = createPathBuilder<z.output<Params>>(route);
 
-  return (params?: z.input<Params>, search?: z.input<Search>) => {
+  return (params?: z.input<Params>, search?: z.input<Search>, anchor?: z.input<Anchor>) => {
     let checkedParams = params || {};
     if (info.params) {
       const safeParams = info.params.safeParse(checkedParams);
@@ -210,7 +228,7 @@ function createRouteBuilder<
 
     const baseUrl = fn(checkedParams);
     const searchString = search && queryString.stringify(search);
-    return [baseUrl, searchString ? `?${searchString}` : ""].join("");
+    return [baseUrl, searchString ? `?${searchString}` : "", anchor ? `#${anchor}` : ""].join("");
   };
 }
 
@@ -219,19 +237,21 @@ const emptySchema = z.object({});
 export function makePostRoute<
   Params extends z.ZodSchema,
   Search extends z.ZodSchema,
+  Anchor extends z.ZodSchema,
   Body extends z.ZodSchema,
   Result extends z.ZodSchema
 >(
   route: string,
-  info: RouteInfo<Params, Search>,
+  info: RouteInfo<Params, Search, Anchor>,
   postInfo: PostInfo<Body, Result>
-): PostRouteBuilder<Params, Search, Body, Result> {
+): PostRouteBuilder<Params, Search, Anchor, Body, Result> {
   const urlBuilder = createRouteBuilder(route, info);
 
-  const routeBuilder: PostRouteBuilder<Params, Search, Body, Result> = (
+  const routeBuilder: PostRouteBuilder<Params, Search, Anchor, Body, Result> = (
     body: z.input<Body>,
     p?: z.input<Params>,
     search?: z.input<Search>,
+    anchor?: z.input<Anchor>,
     options?: FetchOptions
   ): Promise<z.output<Result>> => {
     const safeBody = postInfo.body.safeParse(body);
@@ -241,7 +261,7 @@ export function makePostRoute<
       );
     }
 
-    return fetch(urlBuilder(p, search), {
+    return fetch(urlBuilder(p, search, anchor), {
       ...options,
       method: "POST",
       body: JSON.stringify(safeBody.data),
@@ -271,6 +291,8 @@ export function makePostRoute<
   routeBuilder.paramsSchema = info.params;
   routeBuilder.search = undefined as z.output<Search>;
   routeBuilder.searchSchema = info.search;
+  routeBuilder.anchor = undefined as z.output<Anchor>;
+  routeBuilder.anchorSchema = info.anchor;
   routeBuilder.body = undefined as z.output<Body>;
   routeBuilder.bodySchema = postInfo.body;
   routeBuilder.result = undefined as z.output<Result>;
@@ -282,19 +304,21 @@ export function makePostRoute<
 export function makePutRoute<
   Params extends z.ZodSchema,
   Search extends z.ZodSchema,
+  Anchor extends z.ZodSchema,
   Body extends z.ZodSchema,
   Result extends z.ZodSchema
 >(
   route: string,
-  info: RouteInfo<Params, Search>,
+  info: RouteInfo<Params, Search, Anchor>,
   putInfo: PutInfo<Body, Result>
-): PutRouteBuilder<Params, Search, Body, Result> {
+): PutRouteBuilder<Params, Search, Anchor, Body, Result> {
   const urlBuilder = createRouteBuilder(route, info);
 
-  const routeBuilder: PutRouteBuilder<Params, Search, Body, Result> = (
+  const routeBuilder: PutRouteBuilder<Params, Search, Anchor, Body, Result> = (
     body: z.input<Body>,
     p?: z.input<Params>,
     search?: z.input<Search>,
+    anchor?: z.input<Anchor>,
     options?: FetchOptions
   ): Promise<z.output<Result>> => {
     const safeBody = putInfo.body.safeParse(body);
@@ -304,7 +328,7 @@ export function makePutRoute<
       );
     }
 
-    return fetch(urlBuilder(p, search), {
+    return fetch(urlBuilder(p, search, anchor), {
       ...options,
       method: "PUT",
       body: JSON.stringify(safeBody.data),
@@ -334,6 +358,8 @@ export function makePutRoute<
   routeBuilder.paramsSchema = info.params;
   routeBuilder.search = undefined as z.output<Search>;
   routeBuilder.searchSchema = info.search;
+  routeBuilder.anchor = undefined as z.output<Anchor>;
+  routeBuilder.anchorSchema = info.anchor;
   routeBuilder.body = undefined as z.output<Body>;
   routeBuilder.bodySchema = putInfo.body;
   routeBuilder.result = undefined as z.output<Result>;
@@ -345,20 +371,22 @@ export function makePutRoute<
 export function makeGetRoute<
   Params extends z.ZodSchema,
   Search extends z.ZodSchema,
+  Anchor extends z.ZodSchema,
   Result extends z.ZodSchema
 >(
   route: string,
-  info: RouteInfo<Params, Search>,
+  info: RouteInfo<Params, Search, Anchor>,
   getInfo: GetInfo<Result>
-): GetRouteBuilder<Params, Search, Result> {
+): GetRouteBuilder<Params, Search, Anchor, Result> {
   const urlBuilder = createRouteBuilder(route, info);
 
-  const routeBuilder: GetRouteBuilder<Params, Search, Result> = (
+  const routeBuilder: GetRouteBuilder<Params, Search, Anchor, Result> = (
     p?: z.input<Params>,
     search?: z.input<Search>,
+    anchor?: z.input<Anchor>,
     options?: FetchOptions
   ): Promise<z.output<Result>> => {
-    return fetch(urlBuilder(p, search), options)
+    return fetch(urlBuilder(p, search, anchor), options)
       .then((res) => {
         if (!res.ok) {
           throw new Error(`Failed to fetch ${info.name}: ${res.statusText}`);
@@ -380,6 +408,8 @@ export function makeGetRoute<
   routeBuilder.paramsSchema = info.params;
   routeBuilder.search = undefined as z.output<Search>;
   routeBuilder.searchSchema = info.search;
+  routeBuilder.anchor = undefined as z.output<Anchor>;
+  routeBuilder.anchorSchema = info.anchor;
   routeBuilder.result = undefined as z.output<Result>;
   routeBuilder.resultSchema = getInfo.result;
 
@@ -388,16 +418,18 @@ export function makeGetRoute<
 
 export function makeDeleteRoute<
   Params extends z.ZodSchema,
-  Search extends z.ZodSchema
->(route: string, info: RouteInfo<Params, Search>): DeleteRouteBuilder<Params> {
+  Search extends z.ZodSchema,
+  Anchor extends z.ZodSchema,
+>(route: string, info: RouteInfo<Params, Search, Anchor>): DeleteRouteBuilder<Params> {
   const urlBuilder = createRouteBuilder(route, info);
 
   const routeBuilder: DeleteRouteBuilder<Params> = (
     p?: z.input<Params>,
     search?: z.input<Search>,
+    anchor?: z.input<Anchor>,
     options?: FetchOptions
   ): Promise<void> => {
-    return fetch(urlBuilder(p, search), options).then((res) => {
+    return fetch(urlBuilder(p, search, anchor), options).then((res) => {
       if (!res.ok) {
         throw new Error(`Failed to fetch ${info.name}: ${res.statusText}`);
       }
@@ -408,21 +440,24 @@ export function makeDeleteRoute<
   routeBuilder.paramsSchema = info.params;
   routeBuilder.search = undefined as z.output<Search>;
   routeBuilder.searchSchema = info.search;
+  routeBuilder.anchor = undefined as z.output<Anchor>;
+  routeBuilder.anchorSchema = info.anchor;
 
   return routeBuilder;
 }
 
 export function makeRoute<
   Params extends z.ZodSchema,
-  Search extends z.ZodSchema = typeof emptySchema
+  Search extends z.ZodSchema = typeof emptySchema,
+  Anchor extends z.ZodSchema = typeof emptySchema
 >(
   route: string,
-  info: RouteInfo<Params, Search>
-): RouteBuilder<Params, Search> {
-  const urlBuilder: RouteBuilder<Params, Search> = createRouteBuilder(
+  info: RouteInfo<Params, Search, Anchor>
+): RouteBuilder<Params, Search, Anchor> {
+  const urlBuilder: RouteBuilder<Params, Search, Anchor> = createRouteBuilder(
     route,
     info
-  ) as RouteBuilder<Params, Search>;
+  ) as RouteBuilder<Params, Search, Anchor>;
 
   urlBuilder.useParams = function useParams(): z.output<Params> {
     const res = info.params.safeParse(useNextParams());
@@ -455,14 +490,16 @@ export function makeRoute<
   urlBuilder.ParamsLink = function RouteLink({
     params: linkParams,
     search: linkSearch,
+    anchor: linkAnchor,
     children,
     ...props
   }: Omit<LinkProps, "href"> & {
     params?: z.input<Params>;
     search?: z.input<Search>;
+    anchor?: z.input<Anchor>;
   } & { children?: React.ReactNode }) {
     return (
-      <Link {...props} href={urlBuilder(linkParams, linkSearch)}>
+      <Link {...props} href={urlBuilder(linkParams, linkSearch, linkAnchor)}>
         {children}
       </Link>
     );
@@ -470,11 +507,13 @@ export function makeRoute<
 
   urlBuilder.Link = function RouteLink({
     search: linkSearch,
+    anchor: linkAnchor,
     children,
     ...props
   }: Omit<LinkProps, "href"> &
     z.input<Params> & {
       search?: z.input<Search>;
+      anchor?: z.input<Anchor>;
     } & { children?: React.ReactNode }) {
     const params = info.params.parse(props);
     const extraProps = { ...props };
@@ -484,7 +523,7 @@ export function makeRoute<
     return (
       <Link
         {...extraProps}
-        href={urlBuilder(info.params.parse(props), linkSearch)}
+        href={urlBuilder(info.params.parse(props), linkSearch, linkAnchor)}
       >
         {children}
       </Link>
@@ -496,9 +535,10 @@ export function makeRoute<
     return (
       p: z.input<Params>,
       search?: z.input<Search>,
+      anchor?: z.input<Anchor>,
       options?: PushOptions
     ) => {
-      push(urlBuilder(p, search), options);
+      push(urlBuilder(p, search, anchor), options);
     };
   };
 
@@ -506,6 +546,8 @@ export function makeRoute<
   urlBuilder.paramsSchema = info.params;
   urlBuilder.search = undefined as z.output<Search>;
   urlBuilder.searchSchema = info.search;
+  urlBuilder.anchor = undefined as z.output<Anchor>;
+  urlBuilder.anchorSchema = info.anchor;
 
   return urlBuilder;
 }

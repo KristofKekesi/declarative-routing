@@ -4,7 +4,8 @@ import { makeRoute } from "./makeRoute";
 export const Home = makeRoute("/", {
   name: "Home",
   params: z.object({}),
-  search: z.object({})
+  search: z.object({}),
+  anchor: z.object({})
 });
 
 /*

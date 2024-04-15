@@ -14,22 +14,25 @@ import React from "react";
 
 type LinkProps = Parameters<typeof Link>[0];
 type NavLinkProps = Parameters<typeof NavLink>[0];
-export type RouteBaseDefinition = RouteInfo<ZodSchema, ZodSchema>;
+export type RouteBaseDefinition = RouteInfo<ZodSchema, ZodSchema, ZodSchema>;
 
 export type RouteInfo<
   Params extends z.ZodSchema,
-  Search extends z.ZodSchema
+  Search extends z.ZodSchema,
+  Anchor extends z.ZodSchema,
 > = {
   name: string;
   params: Params;
   search: Search;
+  anchor: Anchor;
 };
 
 export type RouteBuilder<
   Params extends z.ZodSchema,
-  Search extends z.ZodSchema
+  Search extends z.ZodSchema,
+  Anchor extends z.ZodSchema
 > = {
-  (p?: z.input<Params>, search?: z.input<Search>): string;
+  (p?: z.input<Params>, search?: z.input<Search>, anchor?: z.input<Anchor>): string;
 
   useParams: () => z.output<Params>;
   useSearchParams: () => z.output<Search>;
@@ -47,6 +50,7 @@ export type RouteBuilder<
     Omit<LinkProps, "to"> & {
       params?: z.input<Params>;
       search?: z.input<Search>;
+      anchor?: z.input<Anchor>;
     } & { children?: React.ReactNode }
   >;
   NavLink: React.FC<
@@ -59,6 +63,7 @@ export type RouteBuilder<
     Omit<NavLinkProps, "to"> & {
       params?: z.input<Params>;
       search?: z.input<Search>;
+      anchor?: z.input<Anchor>;
     } & { children?: React.ReactNode }
   >;
 
@@ -66,6 +71,8 @@ export type RouteBuilder<
   paramsSchema: Params;
   search: z.output<Search>;
   searchSchema: Search;
+  anchor: z.output<Anchor>;
+  anchorSchema: Anchor;
 };
 
 function createPathBuilder<T extends Record<string, string | string[]>>(
@@ -118,16 +125,18 @@ const emptySchema = z.object({});
 
 export function makeRoute<
   Params extends z.ZodSchema,
-  Search extends z.ZodSchema = typeof emptySchema
+  Search extends z.ZodSchema = typeof emptySchema,
+  Anchor extends z.ZodSchema = typeof emptySchema
 >(
   route: string,
-  info: RouteInfo<Params, Search>
-): RouteBuilder<Params, Search> {
+  info: RouteInfo<Params, Search, Anchor>
+): RouteBuilder<Params, Search, Anchor> {
   const fn = createPathBuilder<z.output<Params>>(route);
 
-  const routeBuilder: RouteBuilder<Params, Search> = (
+  const routeBuilder: RouteBuilder<Params, Search, Anchor> = (
     params?: z.input<Params>,
-    search?: z.input<Search>
+    search?: z.input<Search>,
+    anchor?: z.input<Anchor>
   ) => {
     let checkedParams = params || {};
     if (info.params) {
@@ -153,7 +162,7 @@ export function makeRoute<
     const baseUrl = fn(checkedParams);
     const searchString = search && queryString.stringify(search);
 
-    return [baseUrl, searchString ? `?${searchString}` : ""].join("");
+    return [baseUrl, searchString ? `?${searchString}` : "", anchor ? `#${anchor}` : ""].join("");
   };
 
   routeBuilder.title = info.name;
@@ -199,11 +208,13 @@ export function makeRoute<
   routeBuilder.ParamsLink = function RouteLink({
     params: linkParams,
     search: linkSearch,
+    anchor: linkAnchor,
     children,
     ...props
   }: Omit<LinkProps, "to"> & {
     params?: z.input<Params>;
     search?: z.input<Search>;
+    anchor?: z.input<Anchor>;
   } & { children?: React.ReactNode }) {
     return (
       <Link {...props} to={routeBuilder(linkParams, linkSearch)}>
@@ -214,6 +225,7 @@ export function makeRoute<
 
   routeBuilder.Link = function RouteLink({
     search: linkSearch,
+    anchor: linkAnchor,
     children,
     ...props
   }: Omit<LinkProps, "to"> &
@@ -238,14 +250,16 @@ export function makeRoute<
   routeBuilder.NavParamsLink = function RouteLink({
     params: linkParams,
     search: linkSearch,
+    anchor: linkAnchor,
     children,
     ...props
   }: Omit<NavLinkProps, "to"> & {
     params?: z.input<Params>;
     search?: z.input<Search>;
+    anchor?: z.input<Anchor>;
   } & { children?: React.ReactNode }) {
     return (
-      <NavLink {...props} to={routeBuilder(linkParams, linkSearch)}>
+      <NavLink {...props} to={routeBuilder(linkParams, linkSearch, linkAnchor)}>
         {children}
       </NavLink>
     );
@@ -253,6 +267,7 @@ export function makeRoute<
 
   routeBuilder.NavLink = function RouteLink({
     search: linkSearch,
+    anchor: linkAnchor,
     children,
     ...props
   }: Omit<NavLinkProps, "to"> &
@@ -267,7 +282,7 @@ export function makeRoute<
     return (
       <NavLink
         {...extraProps}
-        to={routeBuilder(info.params.parse(props), linkSearch)}
+        to={routeBuilder(info.params.parse(props), linkSearch, linkAnchor)}
       >
         {children}
       </NavLink>
@@ -278,6 +293,8 @@ export function makeRoute<
   routeBuilder.paramsSchema = info.params;
   routeBuilder.search = undefined as z.output<Search>;
   routeBuilder.searchSchema = info.search;
+  routeBuilder.anchor = undefined as z.output<Anchor>;
+  routeBuilder.anchorSchema = info.anchor;
 
   return routeBuilder;
 }
@@ -306,6 +323,7 @@ type RouteNode = Omit<RouteObject, "children"> & {
   name: string;
   params: ZodSchema;
   search: ZodSchema;
+  anchor: ZodSchema;
   children?: RouteNode[];
 };
 
@@ -313,6 +331,7 @@ type RouteNodeInfer<S extends string> = Omit<RouteObject, "children"> & {
   name: S;
   params: ZodSchema;
   search: ZodSchema;
+  anchor: ZodSchema;
   children?: RouteNodeInfer<S>[] | [];
 };
 
@@ -326,9 +345,9 @@ type RouteNodeToMap<T extends RouteNode> = T extends {
   children: infer R extends RouteNode[];
 }
   ? {
-      [P in T["name"]]: RouteBuilder<T["params"], T["search"]>;
+      [P in T["name"]]: RouteBuilder<T["params"], T["search"], T["anchor"]>;
     } & RouteNodeArrToMap<R>
-  : { [P in T["name"]]: RouteBuilder<T["params"], T["search"]> };
+  : { [P in T["name"]]: RouteBuilder<T["params"], T["search"], T["anchor"]> };
 
 export function parseRoutes<T extends RouteNodeInfer<S>[], S extends string>(
   routes: [...T]
@@ -352,14 +371,15 @@ export function parseRoutes<T extends RouteNodeInfer<S>[], S extends string>(
 
     // @ts-ignore
     return routes.map((route) => {
-      const { name, params, search, ...rest } = route;
+      const { name, params, search, anchor, ...rest } = route;
       // @ts-ignore
       declarativeRoutes[route.name as unknown as keyof RouteNodeArrToMap<T>] =
-        makeRoute<typeof route.params, typeof route.search>(
+        makeRoute<typeof route.params, typeof route.search, typeof route.anchor>(
           makePath([...pathStack, rest.path]),
           {
             name,
             params,
+            anchor,
             search
           }
         ) as unknown as keyof RouteNodeArrToMap<T>;
