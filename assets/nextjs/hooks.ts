@@ -13,22 +13,25 @@ type PushOptions = Parameters<ReturnType<typeof useRouter>["push"]>[1];
 
 export function usePush<
   Params extends z.ZodSchema,
-  Search extends z.ZodSchema = typeof emptySchema
->(builder: RouteBuilder<Params, Search>) {
+  Search extends z.ZodSchema = typeof emptySchema,
+  Anchor extends z.ZodSchema = typeof emptySchema
+>(builder: RouteBuilder<Params, Search, Anchor>) {
   const { push } = useRouter();
   return (
     p: z.input<Params>,
     search?: z.input<Search>,
+	anchor?: z.input<Anchor>,
     options?: PushOptions
   ) => {
-    push(builder(p, search), options);
+    push(builder(p, search, anchor), options);
   };
 }
 
 export function useParams<
   Params extends z.ZodSchema,
-  Search extends z.ZodSchema = typeof emptySchema
->(builder: RouteBuilder<Params, Search>): z.output<Params> {
+  Search extends z.ZodSchema = typeof emptySchema,
+  Anchor extends z.ZodSchema = typeof emptySchema
+>(builder: RouteBuilder<Params, Search, Anchor>): z.output<Params> {
   const res = builder.paramsSchema.safeParse(useNextParams());
   if (!res.success) {
     throw new Error(
@@ -40,8 +43,9 @@ export function useParams<
 
 export function useSearchParams<
   Params extends z.ZodSchema,
-  Search extends z.ZodSchema = typeof emptySchema
->(builder: RouteBuilder<Params, Search>): z.output<Search> {
+  Search extends z.ZodSchema = typeof emptySchema,
+  Anchor extends z.ZodSchema = typeof emptySchema
+>(builder: RouteBuilder<Params, Search, Anchor>): z.output<Search> {
   const res = builder.searchSchema!.safeParse(
     convertURLSearchParamsToObject(useNextSearchParams())
   );
